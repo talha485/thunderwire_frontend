@@ -1,0 +1,45 @@
+/* Global CSS for ThunderWire App */
+/* We use CSS variables so colors are easy to change in one place */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  /* Main colors */
+  --orange: #f97316;
+  --orange-dark: #ea6c0a;
+  --bg-main: #0f1117;
+  --bg-sidebar: #161b22;
+  --bg-card: #1c2333;
+  --bg-input: #1e2535;
+  --bg-hover: #252d3d;
+  --border-color: #2a3448;
+  --text-white: #ffffff;
+  --text-gray: #8b98b5;
+  --text-light: #c8d1e5;
+  --green: #22c55e;
+  --red: #ef4444;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-main);
+  color: var(--text-white);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Scrollbar styling so it looks nice on dark background */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-sidebar);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
