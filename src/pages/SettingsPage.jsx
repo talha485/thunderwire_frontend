@@ -3,9 +3,19 @@ import Logo from "../components/Logo";
 import Avatar from "../components/Avatar";
 import ToggleSwitch from "../components/ToggleSwitch";
 import Button from "../components/Button";
+import { getCurrentUser, logout } from "../api";
+import { initialsOf, colorFor } from "../utils";
 
 // SettingsPage - Screen 6 - Profile settings
 function SettingsPage({ navigate }) {
+  const me = getCurrentUser();
+
+  // POST /api/logout/ deletes the Session row server-side, then api.js clears
+  // the token locally. Either way we end up on the landing page.
+  const handleSignOut = async () => {
+    await logout();
+    navigate("landing");
+  };
   // Active menu item in the left sidebar
   const [activeItem, setActiveItem] = useState("Profile");
 
@@ -92,7 +102,7 @@ function SettingsPage({ navigate }) {
         {/* Sign out button at the bottom */}
         <div style={{ marginTop: "auto", padding: "16px 18px", borderTop: "1px solid var(--border-color)" }}>
           <div
-            onClick={() => navigate("landing")}
+            onClick={handleSignOut}
             style={{
               display: "flex",
               alignItems: "center",
@@ -131,7 +141,7 @@ function SettingsPage({ navigate }) {
         >
           {/* Avatar with online dot */}
           <div style={{ position: "relative" }}>
-            <Avatar initials="TJ" color="#f97316" size={62} />
+            <Avatar initials={initialsOf(me.username)} color={colorFor(me.username)} size={62} />
             {/* Small icon at bottom right of avatar */}
             <div
               style={{
@@ -155,9 +165,9 @@ function SettingsPage({ navigate }) {
 
           {/* Name, role, status */}
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: "700", fontSize: "18px" }}>Talha Javed</div>
+            <div style={{ fontWeight: "700", fontSize: "18px" }}>{me.username}</div>
             <div style={{ color: "var(--text-gray)", fontSize: "14px", marginTop: "2px" }}>
-              Developer
+              User ID {me.id}
             </div>
             {/* Online badge */}
             <div
@@ -179,8 +189,12 @@ function SettingsPage({ navigate }) {
           </div>
 
           {/* Edit profile button */}
-          <Button variant="secondary" style={{ padding: "9px 20px", fontSize: "13px" }}>
-            Edit profile
+          <Button
+            variant="secondary"
+            style={{ padding: "9px 20px", fontSize: "13px" }}
+            onClick={() => navigate("chat")}
+          >
+            ← Back to chat
           </Button>
         </div>
 

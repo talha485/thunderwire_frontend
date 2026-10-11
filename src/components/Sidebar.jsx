@@ -1,11 +1,18 @@
 import { useState } from "react";
 import Logo from "../components/Logo";
 import Avatar from "../components/Avatar";
-import { channels, directMessages } from "../data/mockData";
+import { initialsOf, colorFor } from "../utils";
 
 // Sidebar component - the left panel in the chat screen
-// Shows logo, search, channels list, and direct messages list
-function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel }) {
+// Shows logo, search, the list of other users (as direct messages), and
+// the logged-in user's profile row at the bottom.
+function Sidebar({ users, activeUserId, onSelectUser, currentUser, navigate }) {
+  const [search, setSearch] = useState("");
+
+  const visibleUsers = users.filter((u) =>
+    u.username.toLowerCase().includes(search.toLowerCase())
+  );
+
   const sidebarStyle = {
     width: "260px",
     backgroundColor: "var(--bg-sidebar)",
@@ -16,7 +23,6 @@ function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel 
     flexShrink: 0,
   };
 
-  // Top area with logo and icon
   const topBarStyle = {
     padding: "14px 16px",
     display: "flex",
@@ -53,28 +59,15 @@ function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel 
       {/* Top - Logo */}
       <div style={topBarStyle}>
         <Logo size="small" />
-        <div
-          style={{
-            width: "28px",
-            height: "28px",
-            backgroundColor: "var(--bg-card)",
-            borderRadius: "6px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}
-        >
-          ✎
-        </div>
       </div>
 
-      {/* Search bar */}
+      {/* Search bar - filters the user list */}
       <div style={searchStyle}>
         <span style={{ color: "var(--text-gray)", fontSize: "13px" }}>🔍</span>
         <input
-          placeholder="Search channels, people..."
+          placeholder="Search people..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
           style={{
             background: "none",
             border: "none",
@@ -88,45 +81,28 @@ function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel 
 
       {/* Scrollable list */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        {/* CHANNELS section */}
-        <div style={sectionLabelStyle}>
-          <span>Channels</span>
-          {/* Plus button to add new channel */}
-          <span
-            onClick={openCreateChannel}
-            style={{
-              cursor: "pointer",
-              color: "var(--text-gray)",
-              fontSize: "16px",
-              lineHeight: 1,
-            }}
-            title="Create new channel"
-          >
-            +
-          </span>
-        </div>
-
-        {channels.map((channel) => (
-          <ChannelItem
-            key={channel.id}
-            channel={channel}
-            isActive={activeChannel === channel.id}
-            onClick={() => setActiveChannel(channel.id)}
-          />
-        ))}
-
-        {/* DIRECT MESSAGES section */}
         <div style={sectionLabelStyle}>
           <span>Direct Messages</span>
-          <span style={{ cursor: "pointer", color: "var(--text-gray)", fontSize: "16px" }}>+</span>
+          <span style={{ color: "var(--text-gray)", fontWeight: "400" }}>{users.length}</span>
         </div>
 
-        {directMessages.map((dm) => (
-          <DMItem key={dm.id} dm={dm} />
+        {visibleUsers.length === 0 && (
+          <p style={{ padding: "8px 16px", fontSize: "13px", color: "var(--text-gray)" }}>
+            {users.length === 0 ? "No other users yet. Register a second account." : "No match."}
+          </p>
+        )}
+
+        {visibleUsers.map((user) => (
+          <DMItem
+            key={user.id}
+            user={user}
+            isActive={user.id === activeUserId}
+            onClick={() => onSelectUser(user)}
+          />
         ))}
       </div>
 
-      {/* Bottom - user profile */}
+      {/* Bottom - logged-in user profile, opens settings */}
       <div
         style={{
           padding: "12px 14px",
@@ -138,9 +114,14 @@ function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel 
         }}
         onClick={() => navigate("settings")}
       >
-        <Avatar initials="TJ" color="#f97316" size={34} showOnline={true} />
+        <Avatar
+          initials={initialsOf(currentUser.username)}
+          color={colorFor(currentUser.username)}
+          size={34}
+          showOnline={true}
+        />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "13px", fontWeight: "600" }}>Talha Javed</div>
+          <div style={{ fontSize: "13px", fontWeight: "600" }}>{currentUser.username}</div>
           <div style={{ fontSize: "11px", color: "#22c55e" }}>● Online</div>
         </div>
         <span style={{ color: "var(--text-gray)", fontSize: "14px" }}>⚙</span>
@@ -149,8 +130,8 @@ function Sidebar({ activeChannel, setActiveChannel, navigate, openCreateChannel 
   );
 }
 
-// ChannelItem - a single channel row in the sidebar
-function ChannelItem({ channel, isActive, onClick }) {
+// DMItem - a single user row. Clicking it opens that conversation.
+function DMItem({ user, isActive, onClick }) {
   const style = {
     display: "flex",
     alignItems: "center",
@@ -163,10 +144,17 @@ function ChannelItem({ channel, isActive, onClick }) {
   };
 
   return (
-    <div style={style} onClick={onClick}>
-      <span style={{ color: isActive ? "var(--orange)" : "var(--text-gray)", fontSize: "14px" }}>
-        #
-      </span>
+    <div
+      style={style}
+      onClick={onClick}
+      onMouseOver={(e) => {
+        if (!isActive) e.currentTarget.style.backgroundColor = "var(--bg-hover)";
+      }}
+      onMouseOut={(e) => {
+        if (!isActive) e.currentTarget.style.backgroundColor = "transparent";
+      }}
+    >
+      <Avatar initials={initialsOf(user.username)} color={colorFor(user.username)} size={34} />
       <span
         style={{
           flex: 1,
@@ -175,80 +163,8 @@ function ChannelItem({ channel, isActive, onClick }) {
           fontWeight: isActive ? "600" : "400",
         }}
       >
-        {channel.name}
+        {user.username}
       </span>
-      {/* Unread badge */}
-      {channel.unread > 0 && (
-        <div
-          style={{
-            backgroundColor: "var(--orange)",
-            color: "white",
-            borderRadius: "10px",
-            fontSize: "11px",
-            fontWeight: "700",
-            padding: "1px 7px",
-          }}
-        >
-          {channel.unread}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// DMItem - a single direct message row
-function DMItem({ dm }) {
-  const style = {
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "8px 16px",
-    cursor: "pointer",
-    transition: "background-color 0.15s",
-  };
-
-  return (
-    <div
-      style={style}
-      onMouseOver={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-hover)")}
-      onMouseOut={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-    >
-      <Avatar initials={dm.initials} color={dm.color} size={34} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span style={{ fontSize: "13px", fontWeight: "600" }}>{dm.name}</span>
-          <span style={{ fontSize: "11px", color: "var(--text-gray)" }}>{dm.time}</span>
-        </div>
-        <p
-          style={{
-            fontSize: "12px",
-            color: "var(--text-gray)",
-            whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {dm.preview}
-        </p>
-      </div>
-      {dm.unread > 0 && (
-        <div
-          style={{
-            backgroundColor: "var(--orange)",
-            color: "white",
-            borderRadius: "50%",
-            width: "18px",
-            height: "18px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "11px",
-            fontWeight: "700",
-          }}
-        >
-          {dm.unread}
-        </div>
-      )}
     </div>
   );
 }

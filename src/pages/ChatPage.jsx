@@ -1,128 +1,136 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Sidebar from "../components/Sidebar";
 import Avatar from "../components/Avatar";
-import { generalMessages } from "../data/mockData";
+import ErrorBanner from "../components/ErrorBanner";
+import { listUsers, getHistory, sendMessage, getCurrentUser, getToken } from "../api";
+import { initialsOf, colorFor, formatTime } from "../utils";
+
+const POLL_MS = 2000;       // how often the open conversation is re-fetched
+const USERS_POLL_MS = 10000; // how often the sidebar user list is refreshed
 
 // ChatPage - Screen 4
 // This is the main page users see after logging in
-function ChatPage({ navigate, openCreateChannel }) {
-  const [activeChannel, setActiveChannel] = useState(1);
-  const [messages, setMessages] = useState(generalMessages);
+function ChatPage({ navigate }) {
+  const me = getCurrentUser();
+  const [users, setUsers] = useState([]);
+  const [activeUser, setActiveUser] = useState(null);
+  const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState("");
-  const [isTyping, setIsTyping] = useState(true); // Sara is typing
+  const [error, setError] = useState("");
+  const [sending, setSending] = useState(false);
+
+  // Any API error. A 401 means our token died (expired / logged out elsewhere):
+  // api.js already cleared it, so we just go back to the landing page.
+  const handleError = (err) => {
+    if (!getToken()) {
+      navigate("landing");
+      return;
+    }
+    setError(err.message);
+  };
+
+  // --- load + poll the user list -------------------------------------------
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = () =>
+      listUsers()
+        .then((data) => !cancelled && setUsers(data))
+        .catch(handleError);
+
+    refresh();
+    const timer = setInterval(refresh, USERS_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  // --- load + poll the open conversation -----------------------------------
+  // Runs again every time activeUser changes. The cleanup function stops the
+  // previous interval so we never poll two conversations at once.
+  useEffect(() => {
+    if (!activeUser) return;
+    let cancelled = false;
+    setMessages([]);
+
+    const refresh = () =>
+      getHistory(activeUser.id)
+        .then((data) => {
+          if (cancelled) return;
+          setMessages(data);
+          setError("");
+        })
+        .catch(handleError);
+
+    refresh();
+    const timer = setInterval(refresh, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeUser]);
 
   // When user presses Enter or clicks Send
-  const sendMessage = () => {
-    if (!inputText.trim()) return;
-
-    const newMsg = {
-      id: messages.length + 1,
-      sender: "You",
-      initials: "TJ",
-      color: "#f97316",
-      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-      text: inputText,
-      isMe: true,
-      ticks: true,
-    };
-
-    setMessages([...messages, newMsg]);
-    setInputText("");
+  const handleSend = async () => {
+    const text = inputText.trim();
+    if (!text || !activeUser || sending) return;
+    setSending(true);
+    try {
+      const saved = await sendMessage(activeUser.id, text); // POST /api/messages/send/
+      setMessages((prev) => [...prev, saved]); // show it now, next poll confirms it
+      setInputText("");
+    } catch (err) {
+      handleError(err);
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter") sendMessage();
+    if (e.key === "Enter") handleSend();
   };
 
   return (
     <div style={{ display: "flex", height: "100vh", backgroundColor: "var(--bg-main)" }}>
       {/* LEFT - Sidebar */}
       <Sidebar
-        activeChannel={activeChannel}
-        setActiveChannel={setActiveChannel}
+        users={users}
+        activeUserId={activeUser?.id}
+        onSelectUser={setActiveUser}
+        currentUser={me}
         navigate={navigate}
-        openCreateChannel={openCreateChannel}
       />
 
       {/* RIGHT - Chat area */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        {/* Chat top bar */}
-        <ChatHeader />
+        <ChatHeader user={activeUser} />
 
-        {/* Date separator */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "14px",
-            padding: "16px 28px 8px",
-          }}
-        >
-          <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border-color)" }} />
-          <span style={{ fontSize: "12px", color: "var(--text-gray)" }}>Today</span>
-          <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border-color)" }} />
+        <div style={{ padding: "10px 20px 0" }}>
+          <ErrorBanner message={error} />
         </div>
 
-        {/* Messages list */}
-        <div style={{ flex: 1, overflowY: "auto", padding: "0 20px 16px" }}>
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
-          ))}
-
-          {/* Typing indicator - Sara Khan is typing */}
-          {isTyping && (
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px 6px" }}>
-              <Avatar initials="SK" color="#22c55e" size={34} />
-              <div
-                style={{
-                  backgroundColor: "var(--bg-card)",
-                  borderRadius: "18px",
-                  padding: "10px 16px",
-                  display: "flex",
-                  gap: "4px",
-                  alignItems: "center",
-                }}
-              >
-                {/* Animated three dots */}
-                {[0, 1, 2].map((i) => (
-                  <div
-                    key={i}
-                    style={{
-                      width: "7px",
-                      height: "7px",
-                      borderRadius: "50%",
-                      backgroundColor: "var(--text-gray)",
-                      animation: `bounce 1s infinite ${i * 0.2}s`,
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
+        {!activeUser ? (
+          <EmptyState hasUsers={users.length > 0} />
+        ) : (
+          <MessageList messages={messages} myId={me.id} />
+        )}
 
         {/* Message input bar at the bottom */}
         <MessageInput
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           onKeyDown={handleKeyDown}
-          onSend={sendMessage}
+          onSend={handleSend}
+          disabled={!activeUser || sending}
+          placeholder={activeUser ? `Message ${activeUser.username}...` : "Select a person first"}
         />
       </div>
-
-      {/* CSS for typing dots animation */}
-      <style>{`
-        @keyframes bounce {
-          0%, 60%, 100% { transform: translateY(0); }
-          30% { transform: translateY(-5px); }
-        }
-      `}</style>
     </div>
   );
 }
 
-// ChatHeader - the top bar of the chat area
-function ChatHeader() {
+// ChatHeader - the top bar of the chat area, shows who you're talking to
+function ChatHeader({ user }) {
   const headerStyle = {
     display: "flex",
     alignItems: "center",
@@ -131,67 +139,82 @@ function ChatHeader() {
     borderBottom: "1px solid var(--border-color)",
     backgroundColor: "var(--bg-main)",
     flexShrink: 0,
+    minHeight: "63px",
   };
 
   return (
     <div style={headerStyle}>
-      {/* Channel name and info */}
       <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-        <div
-          style={{
-            width: "34px",
-            height: "34px",
-            backgroundColor: "var(--orange)",
-            borderRadius: "8px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            fontSize: "16px",
-            fontWeight: "700",
-          }}
-        >
-          #
-        </div>
-        <div>
-          <div style={{ fontWeight: "700", fontSize: "16px" }}># general</div>
-          <div style={{ fontSize: "12px", color: "var(--text-gray)" }}>
-            12 members · workspace channel
+        {user ? (
+          <>
+            <Avatar initials={initialsOf(user.username)} color={colorFor(user.username)} size={34} />
+            <div>
+              <div style={{ fontWeight: "700", fontSize: "16px" }}>{user.username}</div>
+              <div style={{ fontSize: "12px", color: "var(--text-gray)" }}>direct message</div>
+            </div>
+          </>
+        ) : (
+          <div style={{ fontWeight: "700", fontSize: "16px", color: "var(--text-gray)" }}>
+            ThunderWire
           </div>
-        </div>
-      </div>
-
-      {/* Icons on the right */}
-      <div style={{ display: "flex", gap: "6px" }}>
-        {["👥", "🔍", "📌", "⚙"].map((icon, i) => (
-          <div
-            key={i}
-            style={{
-              width: "32px",
-              height: "32px",
-              backgroundColor: "var(--bg-card)",
-              borderRadius: "7px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              fontSize: "14px",
-              border: "1px solid var(--border-color)",
-            }}
-          >
-            {icon}
-          </div>
-        ))}
+        )}
       </div>
     </div>
   );
 }
 
-// MessageBubble - renders a single chat message
-// isMe = true means the message is from the logged-in user (shown on right, orange)
-function MessageBubble({ msg }) {
+// EmptyState - shown before a conversation is picked
+function EmptyState({ hasUsers }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "var(--text-gray)",
+        gap: "8px",
+      }}
+    >
+      <div style={{ fontSize: "40px" }}>💬</div>
+      <div style={{ fontSize: "15px" }}>
+        {hasUsers ? "Pick someone on the left to start chatting" : "Waiting for other users to join"}
+      </div>
+    </div>
+  );
+}
+
+// MessageList - scrollable list, auto-scrolls to the newest message
+function MessageList({ messages, myId }) {
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.length]);
+
+  return (
+    <div style={{ flex: 1, overflowY: "auto", padding: "12px 20px 16px" }}>
+      {messages.length === 0 && (
+        <p style={{ textAlign: "center", color: "var(--text-gray)", fontSize: "13px", marginTop: "20px" }}>
+          No messages yet. Say hi.
+        </p>
+      )}
+      {messages.map((msg) => (
+        <MessageBubble key={msg.msg_id} msg={msg} isMe={msg.sender.id === myId} />
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+
+// MessageBubble - renders a single message from the API:
+// { msg_id, sender:{id,username}, recipient:{...}, content, delivery_status, timestamp }
+// isMe = true means the logged-in user sent it (shown on right, orange)
+function MessageBubble({ msg, isMe }) {
   const wrapperStyle = {
     display: "flex",
-    flexDirection: msg.isMe ? "row-reverse" : "row",
+    flexDirection: isMe ? "row-reverse" : "row",
     alignItems: "flex-end",
     gap: "10px",
     padding: "6px 6px",
@@ -200,47 +223,48 @@ function MessageBubble({ msg }) {
   const bubbleStyle = {
     maxWidth: "55%",
     padding: "12px 16px",
-    borderRadius: msg.isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-    backgroundColor: msg.isMe ? "var(--orange)" : "var(--bg-card)",
+    borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+    backgroundColor: isMe ? "var(--orange)" : "var(--bg-card)",
     color: "var(--text-white)",
     fontSize: "14px",
     lineHeight: "1.5",
-    border: msg.isMe ? "none" : "1px solid var(--border-color)",
+    border: isMe ? "none" : "1px solid var(--border-color)",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
   };
 
   const metaStyle = {
     fontSize: "11px",
     color: "var(--text-gray)",
     marginTop: "4px",
-    textAlign: msg.isMe ? "right" : "left",
-    paddingLeft: msg.isMe ? "0" : "44px",
-    paddingRight: msg.isMe ? "44px" : "0",
+    textAlign: isMe ? "right" : "left",
+    paddingLeft: isMe ? "0" : "44px",
+    paddingRight: isMe ? "44px" : "0",
   };
 
   return (
     <div>
       <div style={wrapperStyle}>
-        {/* Avatar only shows for other people's messages */}
-        {!msg.isMe && <Avatar initials={msg.initials} color={msg.color} size={34} />}
-
-        {/* The message bubble */}
-        <div style={bubbleStyle}>{msg.text}</div>
-
-        {/* Placeholder space so my messages align properly */}
-        {msg.isMe && <div style={{ width: 34 }} />}
+        {!isMe && (
+          <Avatar initials={initialsOf(msg.sender.username)} color={colorFor(msg.sender.username)} size={34} />
+        )}
+        <div style={bubbleStyle}>{msg.content}</div>
+        {isMe && <div style={{ width: 34 }} />}
       </div>
 
-      {/* Time + sender name shown below message */}
       <div style={metaStyle}>
-        {msg.time} · {msg.sender}
-        {msg.ticks && <span style={{ marginLeft: "4px", color: "#a3e635" }}>✓✓</span>}
+        {formatTime(msg.timestamp)} · {isMe ? "You" : msg.sender.username}
+        {/* delivery_status 1 = acked (stubbed for now, real ACK comes with UCP) */}
+        {isMe && msg.delivery_status === 1 && (
+          <span style={{ marginLeft: "4px", color: "#a3e635" }}>✓✓</span>
+        )}
       </div>
     </div>
   );
 }
 
 // MessageInput - the text box at the bottom of the chat
-function MessageInput({ value, onChange, onKeyDown, onSend }) {
+function MessageInput({ value, onChange, onKeyDown, onSend, disabled, placeholder }) {
   const containerStyle = {
     padding: "12px 20px 20px",
     borderTop: "1px solid var(--border-color)",
@@ -254,20 +278,18 @@ function MessageInput({ value, onChange, onKeyDown, onSend }) {
     border: "1px solid var(--border-color)",
     borderRadius: "12px",
     padding: "10px 14px",
+    opacity: disabled ? 0.6 : 1,
   };
 
   return (
     <div style={containerStyle}>
       <div style={inputBarStyle}>
-        {/* Attachment icon */}
-        <span style={{ color: "var(--text-gray)", cursor: "pointer", fontSize: "18px" }}>📎</span>
-
-        {/* Text input */}
         <input
           value={value}
           onChange={onChange}
           onKeyDown={onKeyDown}
-          placeholder="Message #general..."
+          disabled={disabled}
+          placeholder={placeholder}
           style={{
             flex: 1,
             background: "none",
@@ -277,18 +299,16 @@ function MessageInput({ value, onChange, onKeyDown, onSend }) {
             fontSize: "14px",
           }}
         />
-
-        {/* Emoji and send buttons */}
-        <span style={{ color: "var(--text-gray)", cursor: "pointer", fontSize: "18px" }}>😊</span>
         <button
           onClick={onSend}
+          disabled={disabled}
           style={{
             backgroundColor: "var(--orange)",
             border: "none",
             borderRadius: "8px",
             color: "white",
             padding: "6px 14px",
-            cursor: "pointer",
+            cursor: disabled ? "not-allowed" : "pointer",
             fontWeight: "600",
             fontSize: "13px",
           }}
@@ -297,7 +317,7 @@ function MessageInput({ value, onChange, onKeyDown, onSend }) {
         </button>
       </div>
       <p style={{ fontSize: "11px", color: "var(--text-gray)", marginTop: "6px", paddingLeft: "4px" }}>
-        Press Enter to send · TLS 1.3 encrypted
+        Press Enter to send
       </p>
     </div>
   );
