@@ -3,12 +3,34 @@ import Logo from "../components/Logo";
 import Button from "../components/Button";
 import InputField from "../components/InputField";
 import Avatar from "../components/Avatar";
+import ErrorBanner from "../components/ErrorBanner";
+import { login } from "../api";
 
 // LoginPage - Screen 2 - Sign in page
 function LoginPage({ navigate }) {
   // State for the form inputs
-  const [email, setEmail] = useState("talha@company.com");
-  const [password, setPassword] = useState("••••••••••");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Called by the Sign In button and by Enter in the password field
+  const handleSubmit = async () => {
+    if (!username.trim() || !password) {
+      setError("Username and password are required");
+      return;
+    }
+    setError("");
+    setLoading(true);
+    try {
+      await login(username.trim(), password); // stores token + user in localStorage
+      navigate("chat");
+    } catch (err) {
+      setError(err.message); // e.g. "invalid credentials"
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const pageStyle = {
     display: "flex",
@@ -82,37 +104,31 @@ function LoginPage({ navigate }) {
             </p>
           </div>
 
-          {/* Email and password fields */}
+          <ErrorBanner message={error} />
+
+          {/* Username and password fields */}
           <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "16px" }}>
             <InputField
-              label="EMAIL ADDRESS"
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              label="USERNAME"
+              type="text"
+              placeholder="your username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              autoFocus
             />
-            <div>
-              <InputField
-                label="PASSWORD"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-              {/* Forgot password link - right aligned */}
-              <div style={{ textAlign: "right", marginTop: "8px" }}>
-                <span
-                  style={{ fontSize: "13px", color: "var(--orange)", cursor: "pointer" }}
-                >
-                  Forgot password?
-                </span>
-              </div>
-            </div>
+            <InputField
+              label="PASSWORD"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+            />
           </div>
 
           {/* Sign In button */}
-          <Button variant="primary" fullWidth onClick={() => navigate("chat")}>
-            Sign In
+          <Button variant="primary" fullWidth onClick={handleSubmit} disabled={loading}>
+            {loading ? "Signing in..." : "Sign In"}
           </Button>
 
           {/* OR divider */}

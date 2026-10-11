@@ -5,11 +5,13 @@ import RegisterPage from "./pages/RegisterPage";
 import ChatPage from "./pages/ChatPage";
 import SettingsPage from "./pages/SettingsPage";
 import CreateChannelModal from "./pages/CreateChannelModal";
+import { getToken } from "./api";
 
 // App is the main component that controls which page is shown
 // We use a simple state variable called "currentPage" instead of a router
 function App() {
-  const [currentPage, setCurrentPage] = useState("landing");
+  // If a token is already saved (page reload), skip straight to chat
+  const [currentPage, setCurrentPage] = useState(getToken() ? "chat" : "landing");
   const [showCreateChannel, setShowCreateChannel] = useState(false);
 
   // This function is passed to child components so they can change pages

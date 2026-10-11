@@ -3,13 +3,48 @@ import Logo from "../components/Logo";
 import Button from "../components/Button";
 import InputField from "../components/InputField";
 import Avatar from "../components/Avatar";
+import ErrorBanner from "../components/ErrorBanner";
+import { register, login } from "../api";
 
 // RegisterPage - Screen 3 - Create new account
+// Only username + password go to the backend. Full name and avatar color are
+// cosmetic for now (no backend fields for them yet).
 function RegisterPage({ navigate }) {
-  const [fullName, setFullName] = useState("Talha Javed");
-  const [email, setEmail] = useState("talha@company.com");
-  const [password, setPassword] = useState("••••••••");
-  const [confirmPassword, setConfirmPassword] = useState("••••••••");
+  const [fullName, setFullName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  // Client-side checks first (instant feedback), then the server call.
+  const handleSubmit = async () => {
+    const name = username.trim();
+    if (!name) return setError("Username is required");
+    if (!/^[\w.@+-]+$/.test(name)) return setError("Username may only contain letters, digits and @ . + - _");
+    if (password.length < 8) return setError("Password must be at least 8 characters");
+    if (password !== confirmPassword) return setError("Passwords do not match");
+
+    setError("");
+    setLoading(true);
+    try {
+      await register(name, password);  // POST /api/register/
+      await login(name, password);     // POST /api/login/ -> token stored
+      navigate("chat");
+    } catch (err) {
+      setError(err.message); // e.g. "username already taken"
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Initials for the avatar preview: from full name if typed, else username
+  const initials = (fullName.trim() || username.trim() || "?")
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   // Avatar color options - the 5 colored circles
   const avatarColors = ["#f97316", "#ef4444", "#22c55e", "#3b82f6", "#8b5cf6"];
@@ -86,21 +121,26 @@ function RegisterPage({ navigate }) {
           </div>
         </div>
 
+        <div style={{ marginBottom: "14px" }}>
+          <ErrorBanner message={error} />
+        </div>
+
         {/* Form fields */}
         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
           <InputField
-            label="FULL NAME"
+            label="USERNAME"
+            type="text"
+            placeholder="pick a username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoFocus
+          />
+          <InputField
+            label="FULL NAME (OPTIONAL)"
             type="text"
             placeholder="Your full name"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
-          />
-          <InputField
-            label="WORK EMAIL"
-            type="email"
-            placeholder="your@company.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
           />
 
           {/* Password fields side by side */}
@@ -118,6 +158,7 @@ function RegisterPage({ navigate }) {
               placeholder="••••••••"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
             />
           </div>
 
@@ -149,12 +190,7 @@ function RegisterPage({ navigate }) {
                   }}
                 >
                   <Avatar
-                    initials={fullName
-                      .split(" ")
-                      .map((n) => n[0])
-                      .join("")
-                      .toUpperCase()
-                      .slice(0, 2)}
+                    initials={initials}
                     color={color}
                     size={40}
                   />
@@ -166,8 +202,8 @@ function RegisterPage({ navigate }) {
 
         {/* Create Account button */}
         <div style={{ marginTop: "20px" }}>
-          <Button variant="primary" fullWidth onClick={() => navigate("chat")}>
-            Create Account
+          <Button variant="primary" fullWidth onClick={handleSubmit} disabled={loading}>
+            {loading ? "Creating account..." : "Create Account"}
           </Button>
         </div>
 

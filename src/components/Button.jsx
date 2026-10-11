@@ -1,11 +1,12 @@
 // Button component - used everywhere in the app
 // variant: "primary" (orange) or "secondary" (dark)
-function Button({ children, onClick, variant = "primary", fullWidth = false, style = {} }) {
+function Button({ children, onClick, variant = "primary", fullWidth = false, disabled = false, style = {} }) {
   const baseStyle = {
     padding: "12px 20px",
     borderRadius: "8px",
     border: "none",
-    cursor: "pointer",
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.6 : 1,
     fontSize: "15px",
     fontWeight: "600",
     display: "flex",
@@ -36,6 +37,7 @@ function Button({ children, onClick, variant = "primary", fullWidth = false, sty
     <button
       style={variant === "primary" ? primaryStyle : secondaryStyle}
       onClick={onClick}
+      disabled={disabled}
       onMouseOver={(e) => (e.currentTarget.style.opacity = "0.85")}
       onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
     >

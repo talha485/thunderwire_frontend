@@ -3,7 +3,7 @@ import { useState } from "react";
 // InputField component - the dark styled input used on login/register pages
 // type: "text", "email", "password"
 // label: the text shown above the input
-function InputField({ label, type = "text", placeholder, value, onChange }) {
+function InputField({ label, type = "text", placeholder, value, onChange, onKeyDown, autoFocus = false }) {
   // For password fields, we need to track if password is visible
   const [showPassword, setShowPassword] = useState(false);
 
@@ -62,12 +62,15 @@ function InputField({ label, type = "text", placeholder, value, onChange }) {
           placeholder={placeholder}
           value={value}
           onChange={onChange}
+          onKeyDown={onKeyDown}
+          autoFocus={autoFocus}
           style={inputStyle}
         />
 
         {/* Show/hide button only for password fields */}
         {type === "password" && (
           <button
+            type="button"
             onClick={() => setShowPassword(!showPassword)}
             style={{
               background: "none",
